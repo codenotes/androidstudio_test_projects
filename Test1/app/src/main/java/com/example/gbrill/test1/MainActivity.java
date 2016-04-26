@@ -10,14 +10,32 @@ import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
+
 import android.hardware.SensorEventListener;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorManager;
 import android.content.Context;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdManager.DiscoveryListener;
+import android.net.nsd.NsdManager.ResolveListener;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.io.InputStreamReader;
+import java.io.Reader;
 
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener {
+public class MainActivity extends AppCompatActivity implements SensorEventListener,
+
+                DiscoveryListener,
+              ResolveListener
+
+{
 
     private SensorManager senSensorManager;
     private Sensor senAccelerometer;
@@ -27,7 +45,150 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private static final int SHAKE_THRESHOLD = 600;
     private String result;
 
+    private NsdManager   manager;
+    private String       serviceType;
+
+    //
+
+    private static final String TAG = "AndroidTalker";
+
     float ax,ay,az,gx,gy,gz;
+
+    public String readIt(InputStream stream, int len) throws IOException, UnsupportedEncodingException {
+        Reader reader = null;
+        reader = new InputStreamReader(stream, "UTF-8");
+        char[] buffer = new char[len];
+        reader.read(buffer);
+        return new String(buffer);
+    }
+
+    private String downloadUrl(String myurl) throws IOException {
+        InputStream is = null;
+        // Only display the first 500 characters of the retrieved
+        // web page content.
+        int len = 500;
+
+        try {
+            URL url = new URL(myurl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setReadTimeout(10000 /* milliseconds */);
+            conn.setConnectTimeout(15000 /* milliseconds */);
+            conn.setRequestMethod("GET");
+            conn.setDoInput(true);
+            // Starts the query
+            conn.connect();
+            int response = conn.getResponseCode();
+            Log.d(TAG, "The response is: " + response);
+            is = conn.getInputStream();
+
+            // Convert the InputStream into a string
+            String contentAsString = readIt(is, len);
+            return contentAsString;
+
+            // Makes sure that the InputStream is closed after the app is
+            // finished using it.
+        } finally {
+            if (is != null) {
+                is.close();
+            }
+        }
+    }
+
+
+
+
+    @Override
+    public void onDiscoveryStarted(String theServiceType)
+    {
+        Log.d(TAG, "onDiscoveryStarted");
+    }
+
+    @Override
+    public void onStartDiscoveryFailed(String theServiceType, int theErrorCode)
+    {
+        Log.d(TAG, "onStartDiscoveryFailed(" + theServiceType + ", " + theErrorCode);
+    }
+
+    @Override
+    public void onDiscoveryStopped(String serviceType)
+    {
+        Log.d(TAG, "onDiscoveryStopped");
+    }
+
+    @Override
+    public void onStopDiscoveryFailed(String theServiceType, int theErrorCode)
+    {
+        Log.d(TAG, "onStartDiscoveryFailed(" + theServiceType + ", " + theErrorCode);
+    }
+
+
+    private class MyResolveListener implements NsdManager.ResolveListener {
+        @Override
+        public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
+            Log.d(TAG, "onResolveFailed(" + serviceInfo + ", " + errorCode);
+        }
+
+        @Override
+        public void onServiceResolved(NsdServiceInfo theServiceInfo) {
+            Log.d(TAG, "onServiceResolved(" + theServiceInfo + ")");
+            Log.d(TAG, "name == " + theServiceInfo.getServiceName());
+            Log.d(TAG, "type == " + theServiceInfo.getServiceType());
+            Log.d(TAG, "host == " + theServiceInfo.getHost());
+            Log.d(TAG, "port == " + theServiceInfo.getPort());
+        }
+    }
+
+    private void serviceFound(NsdServiceInfo theServiceInfo)
+    {
+        //manager.resolveService(theServiceInfo, this);
+
+        manager.resolveService(theServiceInfo, new MyResolveListener());
+
+    }
+
+    @Override
+    public void onServiceFound(NsdServiceInfo theServiceInfo)
+    {
+        Log.d(TAG, "onServiceFound(" + theServiceInfo + ")");
+        Log.d(TAG, "name == " + theServiceInfo.getServiceName());
+        Log.d(TAG, "type == " + theServiceInfo.getServiceType());
+        serviceFound(theServiceInfo);
+    }
+
+    @Override
+    public void onServiceLost(NsdServiceInfo theServiceInfo)
+    {
+        Log.d(TAG, "onServiceLost(" + theServiceInfo + ")");
+    }
+
+    // Resolve Listener
+
+    @Override
+    public void onServiceResolved(NsdServiceInfo theServiceInfo)
+    {
+        Log.d(TAG, "onServiceResolved(" + theServiceInfo + ")");
+        Log.d(TAG, "name == " + theServiceInfo.getServiceName());
+        Log.d(TAG, "type == " + theServiceInfo.getServiceType());
+        Log.d(TAG, "host == " + theServiceInfo.getHost());
+        Log.d(TAG, "port == " + theServiceInfo.getPort());
+    }
+
+    @Override
+    public void onResolveFailed(NsdServiceInfo theServiceInfo, int theErrorCode)
+    {
+        Log.d(TAG, "onResolveFailed(" + theServiceInfo + ", " + theErrorCode);
+    }
+
+
+
+
+
+
+
+
+
+
+
 
     @Override
     public void onSensorChanged(SensorEvent sensorEvent)
@@ -37,6 +198,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         TextView tv=(TextView)findViewById(R.id.txt02);
     //    tv.setText(result);
         Sensor mySensor = sensorEvent.sensor;
+
 
         if (mySensor.getType() == Sensor.TYPE_GYROSCOPE)
         {
@@ -122,9 +284,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
-    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+    public void onAccuracyChanged(Sensor sensor, int accuracy)
+    {
 
     }
+
+
+
+
 
     protected void onPause() {
         super.onPause();
@@ -139,6 +306,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+
+        manager     = (NsdManager)getSystemService(NSD_SERVICE);
+        serviceType =  "_http._tcp";
+
+        manager.discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, this);
+
         setContentView(R.layout.activity_main);
 
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
@@ -146,6 +319,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         TextView tv=(TextView)findViewById(R.id.txt02);
         tv.setText("boobs2");
+
+     //   NsdManager nsdMgr = (NsdManager) getApplicationContext().getSystemService(Context.NSD_SERVICE);
+     //   nsdMgr.discoverServices("_http._tcp.local.", NsdManager.PROTOCOL_DNS_SD, discoveryListener);
+
 
         senSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         senAccelerometer = senSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -159,12 +336,47 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
        FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
+            public void onClick(View view)
+            {
+                String s;
+
+
+
+                    new Thread() {
+                        public void run() {
+                            try
+                            {
+                                downloadUrl("http://10.0.0.150:8888/?CommandID=INSERT%20INTO%20Friends%20(UID,FUID)%20VALUES%20(%22foo!!%22,%20%22bar!!%22);token=allgood");
+                            } catch (java.io.IOException io)
+                            {
+
+                            }
+
+                        }
+
+                    }.start();
+
+
+
+
                 Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
                         .setAction("Action", null).show();
             }
         });
+
+
+
+
+
+
+
     }
+
+
+
+
+
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -187,4 +399,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         return super.onOptionsItemSelected(item);
     }
+
+
+
+
 }
